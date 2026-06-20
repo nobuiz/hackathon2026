@@ -55,8 +55,13 @@ uvicorn server:app --port 8000   # then open ../dashboard/index.html in a browse
    - In `.env`: `CONDUCTOR_SERVER_URL=...`, `CONDUCTOR_AUTH_KEY=...`, `CONDUCTOR_AUTH_SECRET=...`
    - Import `orchestration/referralguard_workflow.json` in the Conductor UI; run `python orchestration/worker.py` (after `pip install conductor-python`).
    - Verify: the HUMAN approval task appears in the Conductor inbox and pauses the workflow until approved.
-3. **Fetch.ai uAgent (agent-to-agent intake):** `pip install uagents`, set `FETCH_AGENT_SEED` in `.env`, run `python backend/fetch_agent.py`. It prints the agent address; register/discover it on https://agentverse.ai. Verify another agent (or ASI:One) can send a `ReferralRequest` and receive a `ReferralVerdict`.
-4. **Files you own:** `backend/submission_agent.py`, `backend/fetch_agent.py`, `orchestration/`.
+3. **Fetch.ai / ASI:One agent (its own prize — read `FETCH_AI.md`):**
+   - `pip install uagents requests`; set `ASI_ONE_API_KEY` (from https://asi1.ai) and `FETCH_AGENT_SEED` in `.env`.
+   - `python backend/fetch_agent.py` → copy the printed **agent address** into `README.md` + `FETCH_AI.md`.
+   - On https://agentverse.ai add it as a **Mailbox** agent, paste the README (keep the `innovationlab` + `hackathon` badges) → it becomes discoverable in ASI:One.
+   - Test in ASI:One with the example prompts in `FETCH_AI.md`; capture the **shared-chat URL** and **agent profile URL** for Devpost.
+   - Optional bonus: run `python backend/clinic_agent.py` for the agent-to-agent demo.
+4. **Files you own:** `backend/submission_agent.py`, `backend/fetch_agent.py`, `backend/clinic_agent.py`, `backend/asi_client.py`, `orchestration/`, `FETCH_AI.md`.
 
 **Done when:** a READY request triggers a real browser submission with a confirmation number, the human-approval gate is visible in Orkes, and the uAgent answers an agent-to-agent referral.
 

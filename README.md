@@ -1,8 +1,15 @@
 # ReferralGuard
 
+![tag:innovationlab](https://img.shields.io/badge/innovationlab-3D8BD3)
+![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1)
+
 **A multi-agent pre-flight check for specialty referrals & prior authorizations — with a watchable, timestamped audit trail.**
 
 UC Berkeley AI Hackathon 2026.
+
+**Fetch.ai / ASI:One:** ReferralGuard is also an ASI:One-discoverable uAgent — describe a referral in
+plain English in ASI:One and get the verdict back, no frontend. Agent name `referralguard`; address is
+printed by `backend/fetch_agent.py`. See **[FETCH_AI.md](FETCH_AI.md)** for the challenge submission details.
 
 ---
 
@@ -97,7 +104,7 @@ This is intentional so judges can run the demo instantly, and so each integratio
 | **Deepgram** | Voice intake — transcribe phone referrals into the pipeline | **Wired** (live with `DEEPGRAM_API_KEY`; baked medical transcript otherwise) | `backend/intake_voice.py`, `POST /intake/voice` |
 | **Sentry** | Exception capture in the agent pipeline (member-ID error path), with breadcrumbs + tags | **Wired** (live with `SENTRY_DSN`) — *Best Use of Sentry API* | `backend/agent_pipeline.py` |
 | **Redis** | Inter-agent session state + audit persistence | **Wired** (live with `REDIS_URL`; in-memory fallback) | `backend/agent_pipeline.py` |
-| **Fetch.ai (uAgents)** | Agent-to-agent intake — a partner clinic's agent (or ASI:One via the Chat Protocol) sends a referral to the ReferralGuard uAgent and gets the verdict back | **Wired** — uAgent adapter over the same pipeline (live with `uagents` + `FETCH_AGENT_SEED`) | `backend/fetch_agent.py` |
+| **Fetch.ai / ASI:One** | ASI:One-discoverable agent: NL referral → verdict, fully in-chat (Agent Chat Protocol). ASI:One LLM extracts fields; a second agent shows agent-to-agent orchestration | **Wired** — `fetch_agent.py` (chat protocol + a2a), `clinic_agent.py`, `asi_client.py`; live with `uagents` + `ASI_ONE_API_KEY` | see **FETCH_AI.md** |
 
 ### What's mocked
 
@@ -118,7 +125,9 @@ calhack/
 │   ├── server.py             ← FastAPI: /health, /process, /intake/voice
 │   ├── agent_pipeline.py     ← the agent pipeline (Claude + Redis + Sentry + gate/submit)
 │   ├── submission_agent.py   ← Browserbase payer-portal submission
-│   ├── fetch_agent.py        ← Fetch.ai uAgent (agent-to-agent intake)
+│   ├── fetch_agent.py        ← Fetch.ai uAgent (ASI:One Chat Protocol)
+│   ├── clinic_agent.py       ← second uAgent (agent-to-agent demo)
+│   ├── asi_client.py         ← ASI:One LLM (NL referral extraction)
 │   ├── intake_voice.py       ← Deepgram voice intake
 │   ├── observability.py      ← Phoenix / JSONL decision-trace logging
 │   ├── requirements.txt
