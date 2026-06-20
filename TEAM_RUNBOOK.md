@@ -55,9 +55,10 @@ uvicorn server:app --port 8000   # then open ../dashboard/index.html in a browse
    - In `.env`: `CONDUCTOR_SERVER_URL=...`, `CONDUCTOR_AUTH_KEY=...`, `CONDUCTOR_AUTH_SECRET=...`
    - Import `orchestration/referralguard_workflow.json` in the Conductor UI; run `python orchestration/worker.py` (after `pip install conductor-python`).
    - Verify: the HUMAN approval task appears in the Conductor inbox and pauses the workflow until approved.
-3. **Files you own:** `backend/submission_agent.py`, `orchestration/`.
+3. **Fetch.ai uAgent (agent-to-agent intake):** `pip install uagents`, set `FETCH_AGENT_SEED` in `.env`, run `python backend/fetch_agent.py`. It prints the agent address; register/discover it on https://agentverse.ai. Verify another agent (or ASI:One) can send a `ReferralRequest` and receive a `ReferralVerdict`.
+4. **Files you own:** `backend/submission_agent.py`, `backend/fetch_agent.py`, `orchestration/`.
 
-**Done when:** a READY request triggers a real browser submission with a confirmation number, and the human-approval gate is visible in Orkes.
+**Done when:** a READY request triggers a real browser submission with a confirmation number, the human-approval gate is visible in Orkes, and the uAgent answers an agent-to-agent referral.
 
 ---
 
@@ -113,6 +114,6 @@ uvicorn server:app --port 8000   # then open ../dashboard/index.html in a browse
 | Part | Sponsors | Prize angle |
 |---|---|---|
 | 1 | Claude, Redis | core functionality |
-| 2 | Browserbase, Orkes | most on-thesis; durable + compliant |
+| 2 | Browserbase, Orkes, Fetch.ai | most on-thesis; durable + compliant; agent-to-agent |
 | 3 | Sentry, Phoenix, Deepgram | Best Use of Sentry API; recruiting |
 | 4 | demo + Devpost + one-pager | Best UI/UX; SkyDeck incubator |

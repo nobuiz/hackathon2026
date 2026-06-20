@@ -97,6 +97,7 @@ This is intentional so judges can run the demo instantly, and so each integratio
 | **Deepgram** | Voice intake — transcribe phone referrals into the pipeline | **Wired** (live with `DEEPGRAM_API_KEY`; baked medical transcript otherwise) | `backend/intake_voice.py`, `POST /intake/voice` |
 | **Sentry** | Exception capture in the agent pipeline (member-ID error path), with breadcrumbs + tags | **Wired** (live with `SENTRY_DSN`) — *Best Use of Sentry API* | `backend/agent_pipeline.py` |
 | **Redis** | Inter-agent session state + audit persistence | **Wired** (live with `REDIS_URL`; in-memory fallback) | `backend/agent_pipeline.py` |
+| **Fetch.ai (uAgents)** | Agent-to-agent intake — a partner clinic's agent (or ASI:One via the Chat Protocol) sends a referral to the ReferralGuard uAgent and gets the verdict back | **Wired** — uAgent adapter over the same pipeline (live with `uagents` + `FETCH_AGENT_SEED`) | `backend/fetch_agent.py` |
 
 ### What's mocked
 
@@ -117,6 +118,7 @@ calhack/
 │   ├── server.py             ← FastAPI: /health, /process, /intake/voice
 │   ├── agent_pipeline.py     ← the agent pipeline (Claude + Redis + Sentry + gate/submit)
 │   ├── submission_agent.py   ← Browserbase payer-portal submission
+│   ├── fetch_agent.py        ← Fetch.ai uAgent (agent-to-agent intake)
 │   ├── intake_voice.py       ← Deepgram voice intake
 │   ├── observability.py      ← Phoenix / JSONL decision-trace logging
 │   ├── requirements.txt
