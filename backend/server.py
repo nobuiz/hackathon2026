@@ -15,6 +15,7 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -34,9 +35,9 @@ def health():
 
 
 @app.post("/process")
-async def process(request: Request):
-    req = await request.json()
-    return ap.run_pipeline(req)
+async def process_referral(referral_data: dict):
+    return ap.run_pipeline(referral_data)
+
 
 
 @app.post("/intake/voice")

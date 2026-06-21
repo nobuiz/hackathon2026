@@ -131,8 +131,7 @@ def requirement_met(hay: str, keywords: list) -> bool:
     return False
 REQUIRED = [("patient.name", "Patient name"), ("patient.dob", "Date of birth"),
             ("diagnosis_code", "ICD-10 diagnosis code"), ("requested_cpt", "Requested CPT/HCPCS"),
-            ("insurance.payer", "Payer"), ("insurance.member_id", "Member ID"),
-            ("npi", "Referring provider NPI")]
+            ("insurance.payer", "Payer"), ("insurance.member_id", "Member ID")]
 MEMBER_ID_RE = re.compile(r"^[A-Z]{2,4}-\d{4}-\d{4}$")
 
 
@@ -153,19 +152,22 @@ def run_pipeline(req: dict) -> dict:
     """req mirrors the sample JSON shape. Returns trace + verdict for the dashboard."""
     steps, flags = [], []
     t = {"ms": 0}
-    session = "sess:%s:%s" % (req["id"][-3:], "".join(random.choices(string.ascii_lowercase + string.digits, k=5)))
+    req_id = req.get("id") or req.get("request_id") or "UNK"
+    session = "sess:%s:%s" % (req_id[-3:], "".join(random.choices(string.ascii_lowercase + string.digits, k=5)))
 
     def push(who, badge, act, det):
         t["ms"] += 40 + random.randint(0, 90)
         steps.append({"who": who, "badge": badge, "act": act, "det": det, "ms": t["ms"]})
         # persist every step as a span (local JSONL always; Arize if configured)
-        obs.log_span(session, who, {"act": act, "engine": badge, "request_id": req["id"]})
+        obs.log_span(session, who, {"act": act, "engine": badge, "request_id": req_id})
 
     # 1. Intake
     state_set(session, "status", "RECEIVED")
-    sentry_breadcrumb("intake", {"request_id": req["id"]})
+    sentry_breadcrumb("intake", {"request_id": req_id})
+    chan   = req.get("chan")   or req.get("channel",   "unknown")
+    clinic = req.get("clinic") or req.get("source_clinic", "unknown")
     push("Intake Agent", "redis", "Request received — session opened",
-         f'Channel <code>{req["chan"]}</code> · clinic “{req["clinic"]}”. Raw payload cached to '
+         f'Channel <code>{chan}</code> · clinic "{clinic}". Raw payload cached to '
          f'<code>{session}</code> (TTL 1h){" via Redis" if REDIS_ON else " (in-memory)"}. State → <code>RECEIVED</code>.')
 
     # 2. Extraction (Claude or mock)
@@ -174,13 +176,14 @@ def run_pipeline(req: dict) -> dict:
             ex = claude_extract(req.get("raw", ""))
             src = "Claude (live)"
         except Exception as e:
-            sentry_capture(e, {"stage": "extract", "request_id": req["id"]}); ex, src = {}, "mock (Claude error)"
+            sentry_capture(e, {"stage": "extract", "request_id": req_id}); ex, src = {}, "mock (Claude error)"
     else:
         ex, src = {}, "deterministic mock"
+    patient_name = (req.get("patient") or {}).get("name", "Unknown")
     push("Extraction Agent", "claude", "Structured fields extracted from raw text",
-         f'Parsed via {src}: patient=<code>{req["patient"]["name"]}</code> · '
+         f'Parsed via {src}: patient=<code>{patient_name}</code> · '
          f'dx=<code>{req.get("diagnosis_code") or "∅ not found"}</code> · cpt=<code>{req.get("requested_cpt")}</code> · '
-         f'payer=<code>{req["insurance"]["payer"]}</code>')
+         f'payer=<code>{(req.get("insurance") or {}).get("payer", "unknown")}</code>')
 
     # 3. Completeness
     missing = [(p, label) for (p, label) in REQUIRED if not _get(req, p)]
@@ -193,16 +196,17 @@ def run_pipeline(req: dict) -> dict:
                       "rsn": "Payer will reject or pend a submission without this field."})
 
     # 4. Validation (+ Sentry path)
+    member_id_val = (req.get("insurance") or {}).get("member_id", "")
     push("Validation Agent", "redis", "Member ID format validation",
-         f'Checking <code>{req["insurance"]["member_id"]}</code> against payer ID pattern…')
+         f'Checking <code>{member_id_val}</code> against payer ID pattern…')
     try:
-        if not MEMBER_ID_RE.match(req["insurance"]["member_id"] or ""):
-            raise MemberIdFormatError(f'invalid member id: {req["insurance"]["member_id"]}')
+        if not MEMBER_ID_RE.match(member_id_val or ""):
+            raise MemberIdFormatError(f'invalid member id: {member_id_val}')
         state_set(session, "status", "VALIDATED")
         push("Validation Agent", "redis", "Member ID OK", "Format valid. State → <code>VALIDATED</code>.")
     except MemberIdFormatError as e:
-        sentry_breadcrumb("validate.fail", {"member_id": req["insurance"]["member_id"]})
-        evt = sentry_capture(e, {"request_id": req["id"], "payer": req["insurance"]["payer"]})
+        sentry_breadcrumb("validate.fail", {"member_id": member_id_val})
+        evt = sentry_capture(e, {"request_id": req_id, "payer": (req.get("insurance") or {}).get("payer", "unknown")})
         push("Sentry", "sentry", "Exception captured — pipeline did NOT crash",
              f'<code>MemberIdFormatError</code> raised while normalizing insurance ID. '
              f'Captured to Sentry as <code>{evt}</code>{"" if SENTRY_ON else " (local id; set SENTRY_DSN to send)"} '
@@ -213,20 +217,23 @@ def run_pipeline(req: dict) -> dict:
     # 5. Denial-risk (Claude or rule)
     cpt = req.get("requested_cpt")
     rule = PAYER_RULES.get(cpt)
-    push("Denial-Risk Agent", "claude", f'Payer-policy reasoning for {req["insurance"]["payer"]}',
+    payer_name = (req.get("insurance") or {}).get("payer", "unknown")
+    push("Denial-Risk Agent", "claude", f'Payer-policy reasoning for {payer_name}',
          (f'Procedure {rule["name"]} (CPT {cpt}) has a known <b>{rule["need"]}</b> requirement. '
           f'Scanning clinical note for supporting evidence…') if rule else
          f'CPT {cpt}: no high-risk utilization rule on file. Checking baseline medical-necessity language…')
     if rule:
-        hay = (req.get("raw", "") + " " + req.get("procedure", "")).lower()
+        procedure = req.get("procedure") or req.get("requested_procedure", "")
+        raw_text = req.get("raw") or req.get("raw_text", "")
+        hay = (raw_text + " " + procedure).lower()
         high = not requirement_met(hay, rule["keywords"])
         reason = rule["msg"]
         if CLAUDE_ON:
             try:
-                r = claude_risk(req["insurance"]["payer"], req.get("procedure"), cpt, req.get("raw", ""), rule["msg"])
+                r = claude_risk(payer_name, procedure, cpt, raw_text, rule["msg"])
                 high = r.get("risk") == "high"; reason = r.get("reason", reason)
             except Exception as e:
-                sentry_capture(e, {"stage": "risk", "request_id": req["id"]})
+                sentry_capture(e, {"stage": "risk", "request_id": req_id})
         if high:
             push("Denial-Risk Agent", "claude", f'HIGH denial risk — {rule["need"]} not documented',
                  f'{reason} No supporting evidence found in the referral. Predicted outcome: <b>denial / pend</b> if submitted as-is.')
@@ -256,7 +263,9 @@ def run_pipeline(req: dict) -> dict:
         push("Approval Gate", "orkes", "Human-in-the-loop approval — required for prior auth",
              f'Conductor <code>HUMAN</code> task created and awaiting sign-off (prior auth legally requires a human). '
              f'Approved by <code>{approver}</code>{"" if ORKES_ON else " — simulated; set CONDUCTOR_SERVER_URL to run on Orkes"}. Workflow resumes.')
-        submission = sub_agent.run_submission(req, push)
+        submission = sub_agent.run_submission(req_id, patient_name, member_id_val,
+                                              req.get("requested_cpt", "Unknown"),
+                                              req.get("diagnosis_code", "Unknown"), push)
         state_set(session, "submission", submission)
     else:
         push("Routing Agent", "rule", "Routed to human review queue",
