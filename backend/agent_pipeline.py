@@ -26,7 +26,13 @@ SENTRY_ON = False
 try:
     if SENTRY_DSN:
         import sentry_sdk
-        sentry_sdk.init(dsn=SENTRY_DSN, traces_sample_rate=1.0, environment="hackathon-demo")
+        from sentry_sdk.integrations.strawberry import StrawberryIntegration
+        sentry_sdk.init(
+            dsn=SENTRY_DSN,
+            traces_sample_rate=1.0,
+            environment="hackathon-demo",
+            disabled_integrations=[StrawberryIntegration]
+        )
         SENTRY_ON = True
 except Exception:
     SENTRY_ON = False
@@ -39,11 +45,14 @@ def sentry_breadcrumb(msg, data=None):
 def sentry_capture(exc, tags=None):
     if SENTRY_ON:
         import sentry_sdk
-        with sentry_sdk.push_scope() as scope:
+        # Set tags on the current scope so they attach to THIS event, then capture
+        # inside the same scope (push_scope/capture-outside lost the tags before).
+        with sentry_sdk.new_scope() as scope:
             for k, v in (tags or {}).items():
                 scope.set_tag(k, v)
-        return sentry_sdk.capture_exception(exc)
+            return sentry_sdk.capture_exception(exc)
     return "evt_" + "".join(random.choices(string.ascii_lowercase + string.digits, k=10))
+
 
 # Redis -----------------------------------------------------------
 _redis = None
@@ -115,6 +124,12 @@ PAYER_RULES = {
     "73721": {"name": "Knee MRI", "need": "conservative therapy",
               "keywords": ["physical therapy", "weeks pt", "conservative"],
               "msg": "Payer expects a trial of conservative management (e.g., 6 weeks PT) before advanced knee imaging."},
+    "70551": {"name": "Brain MRI", "need": "red-flag symptoms",
+              "keywords": ["neurological deficit", "progressive headache", "new onset seizure", "cranial neuropathy", "altered mental status"],
+              "msg": "Payer policy requires documented progressive neurological deficit, progressive headache, cranial neuropathy, new onset seizure, or altered mental status prior to Brain MRI authorization."},
+    "73221": {"name": "Shoulder MRI", "need": "conservative therapy",
+              "keywords": ["physical therapy", "weeks pt", "home exercise", "injection", "x-ray", "radiograph"],
+              "msg": "Payer guidelines expect initial radiographs (X-ray) and a trial of 4-6 weeks of conservative management (PT, home exercise, or injections) before shoulder MRI authorization."},
 }
 # A requirement counts as MET only if a keyword appears AND is not negated nearby
 # ("No documentation of methotrexate" must NOT count as a methotrexate trial).

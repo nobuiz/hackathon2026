@@ -9,5 +9,11 @@ venv/
 backend/.env
 backend/traces.jsonl
 
+# Logs & local diagnostics
+*.log
+backend/owned_result.txt
+
 # OS
 .DS_Store
+
+
