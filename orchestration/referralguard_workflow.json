@@ -17,7 +17,7 @@
       "taskReferenceName": "extract",
       "type": "SIMPLE",
       "description": "Claude extracts typed fields from raw/transcribed referral text",
-      "inputParameters": { "raw": "${intake.output.raw}" }
+      "inputParameters": { "raw": "${intake.output.raw}", "request": "${workflow.input.request}" }
     },
     {
       "name": "completeness_agent",
@@ -61,8 +61,8 @@
           {
             "name": "human_approval_gate",
             "taskReferenceName": "approval",
-            "type": "HUMAN",
-            "description": "Prior auth legally requires a human sign-off before submission. Workflow pauses here until an approver completes the task in the Orkes inbox.",
+            "type": "WAIT",
+            "description": "Prior auth legally requires a human sign-off before submission. This WAIT task pauses the workflow indefinitely until an approver completes it (POST /api/tasks with COMPLETED), at which point the workflow resumes to submission.",
             "inputParameters": { "verdict": "${decide.output.verdict}", "flags": "${decide.output.flags}" }
           },
           {

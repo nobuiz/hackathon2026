@@ -61,10 +61,25 @@ Reload the dashboard after a restart so it re-checks the backend.
 - Test in ASI:One with the example prompts in `FETCH_AI.md`; save the **shared-chat URL** + **agent profile URL** for Devpost.
 - Agent-to-agent bonus: second tab → `export REFERRALGUARD_AGENT_ADDRESS=agent1q...` then `python clinic_agent.py`.
 
-## 7. Orkes Conductor  (orchestration + human gate)
-- Free cluster: https://orkes.io → Conductor → `CONDUCTOR_SERVER_URL` + auth key/secret in `.env`.
-- `pip install conductor-python`, import `orchestration/referralguard_workflow.json` in the Conductor UI, run `python orchestration/worker.py`.
-- Verify: `"orkes":true`. The HUMAN approval task appears in the Conductor inbox and pauses the workflow until approved.
+## 7. Orkes Conductor  (orchestration + approval gate)  ✅ LIVE
+- Free cluster: https://orkes.io → Conductor → `CONDUCTOR_SERVER_URL` (must end in `/api`) + an
+  Application key/secret → `CONDUCTOR_AUTH_KEY` / `CONDUCTOR_AUTH_SECRET` in `.env`. Verify: `"orkes":true` in `/health`.
+- `pip install conductor-python`, then drive everything from `orchestration/`:
+  ```bash
+  cd orchestration
+  source ../backend/.env                                         # load creds
+  ../backend/.venv/bin/python worker.py                          # leave running — 8 task workers
+  python register.py                                             # register taskdefs + workflow (once)
+  python register.py --run ../samples/01_clean_cardiology.json   # start a run -> prints workflow id
+  python register.py --status  <id>                              # see it PAUSED at the approval gate
+  python register.py --approve <id>                              # approve -> resumes -> submission -> COMPLETED
+  ```
+- The full 8-task DAG runs on your cluster and **pauses at the approval gate (a `WAIT` task)** until
+  `--approve` completes it; then it resumes to submission. Non-READY verdicts route to `route_human_review`.
+- **Gotchas baked into the code** (don't re-discover them): execution is a threaded REST poller in
+  `worker.py` (conductor-python's multiprocessing dies silently on macOS/Py3.13); Orkes Cloud auth uses
+  the `X-Authorization` header; the gate is a `WAIT` task (a bare `HUMAN` task needs a user-form +
+  assignment before it can be completed).
 
 ---
 

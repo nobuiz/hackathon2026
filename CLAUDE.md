@@ -48,7 +48,9 @@ Then trigger the captured-error path (the **MRI right knee** sample / bad member
 - `backend/clinic_agent.py` — 2nd uAgent (agent-to-agent demo); `backend/asi_client.py` — ASI:One LLM
 - `backend/selftest.py` — end-to-end test
 - `dashboard/index.html` — single-file Apple-style live dashboard (mirrors the pipeline; works offline)
-- `orchestration/` — Orkes Conductor workflow (+ HUMAN approval gate) and workers
+- `orchestration/` — Orkes Conductor: `referralguard_workflow.json` (8-task DAG + WAIT approval gate),
+  `worker.py` (threaded REST poller running all 8 task workers), `register.py` (register / --run /
+  --status / --approve the workflow on the cluster)
 - `samples/` — 5 referral JSONs (expected verdicts in `selftest.py`)
 - Docs: `README.md`, `GO_LIVE.md` (turn on each engine), `TEAM_RUNBOOK.md` (4-person split),
   `FETCH_AI.md` (ASI:One submission), `DEVPOST.md`, `SPONSOR_TALKING_POINTS.md`, `one-pager.html`
@@ -59,6 +61,13 @@ Then trigger the captured-error path (the **MRI right knee** sample / bad member
 - Denial-risk uses **negation-aware** matching (e.g. "no methotrexate" must NOT count as documented).
 - The dashboard talks to `http://localhost:8000`; the chip flips to "live" when the backend is up.
 - Commit author email for pushes: `meetp06@users.noreply.github.com` (GitHub email-privacy block).
+- **Orkes gotchas** (live on `developer.orkescloud.com`): execution uses a custom threaded REST poller
+  in `orchestration/worker.py`, NOT `conductor-python`'s `TaskHandler` — the SDK's multiprocessing
+  silently kills most worker processes on macOS/Py3.13 (tasks stick in `SCHEDULED`). Orkes Cloud auth
+  uses the **`X-Authorization`** header (not `Authorization`). The approval gate is a **`WAIT`** task,
+  completed via `POST /api/tasks` (a bare `HUMAN` task needs a user-form + assignment to be
+  completable). Extraction derives fields from the structured request when Claude is off, so the DAG
+  runs end-to-end without `ANTHROPIC_API_KEY`.
 
 ## What's left (nice-to-have)
 - Finish Sentry (above). Optionally make `/intake/voice` extract fields from the transcript so spoken
